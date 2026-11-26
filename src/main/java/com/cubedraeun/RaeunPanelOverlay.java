@@ -111,6 +111,11 @@ class RaeunPanelOverlay extends OverlayPanel
 			}
 		}
 
+		if (config.highlightChest() && plugin.lapStartTick >= 0 && !plugin.chestLooted)
+		{
+			line("Chest", "not looted", config.chestColor());
+		}
+
 		RaeunPlugin.Charge charge = plugin.currentCharge();
 		if (config.showClickCounter() && charge != null)
 		{

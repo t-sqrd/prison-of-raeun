@@ -83,7 +83,7 @@ public interface RaeunConfig extends Config
 	@ConfigItem(keyName = "chestColor", name = "Chest", description = "Outline colour for the reward chest", section = obstacles, position = 8)
 	default Color chestColor()
 	{
-		return new Color(0x4F, 0xC3, 0xD9);
+		return new Color(0xFF, 0x3D, 0xC8);
 	}
 
 	@ConfigItem(keyName = "showClickCounter", name = "Count clicks on charged jumps", description = "Show how many times you have clicked the charged jump, next to how many it needs", section = charged, position = 0)

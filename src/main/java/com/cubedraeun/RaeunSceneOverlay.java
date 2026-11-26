@@ -22,6 +22,9 @@ class RaeunSceneOverlay extends Overlay
 {
 	private static final BasicStroke THIN = new BasicStroke(1.5f);
 	private static final BasicStroke THICK = new BasicStroke(2.5f);
+	private static final BasicStroke HEAVY = new BasicStroke(4f);
+	private static final int CHEST_FILL = 110;
+	private static final int CHEST_REACH = 60;
 
 	private final Client client;
 	private final RaeunPlugin plugin;
@@ -46,7 +49,6 @@ class RaeunSceneOverlay extends Overlay
 			return null;
 		}
 		WorldPoint here = me.getWorldLocation();
-		int plane = client.getTopLevelWorldView().getPlane();
 		Point mouse = client.getMouseCanvasPosition();
 		RaeunPlugin.Charge charge = plugin.currentCharge();
 		boolean canThieve = client.getRealSkillLevel(Skill.THIEVING) >= 65;
@@ -61,19 +63,21 @@ class RaeunSceneOverlay extends Overlay
 		{
 			TileObject o = en.getKey();
 			RaeunPlugin.Tracked t = en.getValue();
-			if (o.getPlane() != plane || o.getWorldLocation().distanceTo(here) > reach)
+			boolean chest = t.kind == RaeunPlugin.Kind.CHEST;
+			if (o.getWorldLocation().distanceTo2D(here) > (chest ? CHEST_REACH : reach))
 			{
 				continue;
 			}
 			Color color;
 			String label = null;
-			if (t.kind == RaeunPlugin.Kind.CHEST)
+			if (chest)
 			{
 				if (!chestWanted || !plugin.chestOpenable(o))
 				{
 					continue;
 				}
 				color = config.chestColor();
+				label = "Loot chest";
 			}
 			else if (t.kind == RaeunPlugin.Kind.FAST)
 			{
@@ -112,13 +116,14 @@ class RaeunSceneOverlay extends Overlay
 				continue;
 			}
 			boolean hover = mouse != null && box.contains(mouse.getX(), mouse.getY());
-			if (fill > 0)
+			int alpha = chest ? CHEST_FILL : Math.min(255, hover ? fill * 2 : fill);
+			if (alpha > 0)
 			{
-				g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.min(255, hover ? fill * 2 : fill)));
+				g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
 				g.fill(box);
 			}
 			g.setColor(color);
-			g.setStroke(hover ? THICK : THIN);
+			g.setStroke(chest ? HEAVY : hover ? THICK : THIN);
 			g.draw(box);
 
 			if (label != null)
