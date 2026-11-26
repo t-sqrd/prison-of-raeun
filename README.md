@@ -6,7 +6,7 @@ A RuneLite plugin for the Prison of Raeun agility course on The Graveyard (65 Ag
 
 **On the course**
 
-- An outline on every obstacle, coloured by route: green for the charged jumps (fast), yellow for the stepping stones and boats that skip them (slow), orange for obstacles every lap passes.
+- An outline on every obstacle, fast route and slow route alike.
 - Only the stepping stones that hold your weight are outlined. The loose planks beside them are left alone.
 - On each charged jump, the clicks it needs and a counter while you charge it, for example `2 / 4`.
 - The reward chest, outlined during a lap until you loot it. Needs 65 Thieving.

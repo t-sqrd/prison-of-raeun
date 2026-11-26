@@ -90,7 +90,7 @@ class RaeunSceneOverlay extends Overlay
 				}
 				else
 				{
-					color = config.fastColor();
+					color = config.obstacleColor();
 					if (need > 0)
 					{
 						label = "x" + need + (plugin.clicksConfirmed(t.key) ? "" : "?");
@@ -107,7 +107,7 @@ class RaeunSceneOverlay extends Overlay
 				{
 					continue;
 				}
-				color = t.kind == RaeunPlugin.Kind.SLOW ? config.slowColor() : config.sharedColor();
+				color = config.obstacleColor();
 			}
 
 			Shape box = o.getClickbox();

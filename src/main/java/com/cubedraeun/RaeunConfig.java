@@ -39,24 +39,10 @@ public interface RaeunConfig extends Config
 	}
 
 	@Alpha
-	@ConfigItem(keyName = "fastColor", name = "Fast route", description = "Outline colour for the charged jumps", section = obstacles, position = 2)
-	default Color fastColor()
+	@ConfigItem(keyName = "obstacleColor", name = "Obstacle", description = "Outline colour for every obstacle on the course", section = obstacles, position = 2)
+	default Color obstacleColor()
 	{
 		return new Color(0x6C, 0xD2, 0x4A);
-	}
-
-	@Alpha
-	@ConfigItem(keyName = "slowColor", name = "Slow route", description = "Outline colour for the stepping stones and boats that skip the charged jumps", section = obstacles, position = 3)
-	default Color slowColor()
-	{
-		return new Color(0xEB, 0xD2, 0x3C);
-	}
-
-	@Alpha
-	@ConfigItem(keyName = "sharedColor", name = "Both routes", description = "Outline colour for obstacles every lap passes", section = obstacles, position = 4)
-	default Color sharedColor()
-	{
-		return new Color(0xF0, 0x8C, 0x2E);
 	}
 
 	@Alpha
