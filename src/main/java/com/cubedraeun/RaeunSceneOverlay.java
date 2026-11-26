@@ -23,9 +23,11 @@ class RaeunSceneOverlay extends Overlay
 	private static final BasicStroke THIN = new BasicStroke(1.5f);
 	private static final BasicStroke THICK = new BasicStroke(2.5f);
 	private static final BasicStroke HEAVY = new BasicStroke(4f);
-	private static final BasicStroke DASHED = new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{6f, 4f}, 0f);
+	private static final int FILL = 35;
 	private static final int CHEST_FILL = 110;
+	private static final int REACH = 30;
 	private static final int CHEST_REACH = 60;
+	private static final int CHEST_THIEVING = 65;
 
 	private final Client client;
 	private final RaeunPlugin plugin;
@@ -49,66 +51,72 @@ class RaeunSceneOverlay extends Overlay
 		{
 			return null;
 		}
+		boolean obstacles = config.highlightObstacles();
+		boolean chestWanted = config.highlightChest() && !plugin.chestLooted && plugin.lapStartTick >= 0
+			&& client.getRealSkillLevel(Skill.THIEVING) >= CHEST_THIEVING;
+		if (!obstacles && !chestWanted)
+		{
+			return null;
+		}
 		WorldPoint here = me.getWorldLocation();
 		Point mouse = client.getMouseCanvasPosition();
 		RaeunPlugin.Charge charge = plugin.currentCharge();
-		boolean canThieve = client.getRealSkillLevel(Skill.THIEVING) >= 65;
-		int reach = config.drawDistance();
-
-		boolean counter = config.showClickCounter();
-		boolean outline = config.highlightObstacles();
-		boolean chestWanted = config.highlightChest() && canThieve && !plugin.chestLooted && plugin.lapStartTick >= 0;
-		int fill = config.fillOpacity();
 
 		for (Map.Entry<TileObject, RaeunPlugin.Tracked> en : plugin.objects.entrySet())
 		{
 			TileObject o = en.getKey();
 			RaeunPlugin.Tracked t = en.getValue();
 			boolean chest = t.kind == RaeunPlugin.Kind.CHEST;
-			if (o.getWorldLocation().distanceTo2D(here) > (chest ? CHEST_REACH : reach))
+			if (chest ? !chestWanted : !obstacles)
 			{
 				continue;
 			}
+			if (o.getWorldLocation().distanceTo2D(here) > (chest ? CHEST_REACH : REACH))
+			{
+				continue;
+			}
+
 			Color color;
 			String label = null;
-			if (chest)
+			BasicStroke stroke = THIN;
+			switch (t.kind)
 			{
-				if (!chestWanted || !plugin.chestOpenable(o))
-				{
-					continue;
-				}
-				color = config.chestColor();
-				label = "Loot chest";
-			}
-			else if (t.kind == RaeunPlugin.Kind.FAST)
-			{
-				int need = plugin.clicksNeeded(o.getId(), t.key);
-				boolean charging = counter && charge != null && charge.id == o.getId() && charge.x == t.x && charge.y == t.y;
-				if (charging)
-				{
-					color = config.chargingColor();
-					label = need > 0 ? charge.clicks + " / " + need : String.valueOf(charge.clicks);
-				}
-				else
-				{
-					color = config.chargedColor();
-					if (need > 0)
+				case CHEST:
+					if (!plugin.chestOpenable(o))
 					{
-						label = "x" + need + (plugin.clicksConfirmed(o.getId(), t.key) ? "" : "?");
+						continue;
 					}
-				}
-				if (!outline && label == null)
-				{
-					continue;
-				}
-			}
-			else
-			{
-				if (!outline || (t.stone && !t.solid))
-				{
-					continue;
-				}
-				color = t.stone ? config.fastColor() : t.kind == RaeunPlugin.Kind.SLOW ? config.slowColor() : config.obstacleColor();
+					color = config.chestColor();
+					label = "Loot chest";
+					stroke = HEAVY;
+					break;
+				case CHARGED:
+					int need = RaeunPlugin.clicksNeeded(o.getId());
+					if (charge != null && charge.id == o.getId() && charge.x == t.x && charge.y == t.y)
+					{
+						color = Color.WHITE;
+						label = need > 0 ? charge.clicks + " / " + need : String.valueOf(charge.clicks);
+						stroke = THICK;
+					}
+					else
+					{
+						color = config.chargedColor();
+						label = need > 0 ? "x" + need : null;
+					}
+					break;
+				case STONE:
+					if (!t.solid)
+					{
+						continue;
+					}
+					color = config.fastColor();
+					break;
+				case SLOW:
+					color = config.slowColor();
+					break;
+				default:
+					color = config.obstacleColor();
+					break;
 			}
 
 			Shape box = o.getClickbox();
@@ -121,14 +129,11 @@ class RaeunSceneOverlay extends Overlay
 				continue;
 			}
 			boolean hover = mouse != null && box.contains(mouse.getX(), mouse.getY());
-			int alpha = chest ? CHEST_FILL : Math.min(255, hover ? fill * 2 : fill);
-			if (alpha > 0)
-			{
-				g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
-				g.fill(box);
-			}
+			int alpha = chest ? CHEST_FILL : hover ? FILL * 2 : FILL;
+			g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+			g.fill(box);
 			g.setColor(color);
-			g.setStroke(chest ? HEAVY : t.kind == RaeunPlugin.Kind.SLOW ? DASHED : hover ? THICK : THIN);
+			g.setStroke(hover && stroke == THIN ? THICK : stroke);
 			g.draw(box);
 
 			if (label != null)

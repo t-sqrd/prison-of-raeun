@@ -3,21 +3,17 @@ package com.cubedraeun;
 import com.google.inject.Provides;
 import java.util.ArrayDeque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.Set;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.Experience;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.ObjectComposition;
-import net.runelite.api.Player;
 import net.runelite.api.Scene;
 import net.runelite.api.Skill;
 import net.runelite.api.Tile;
@@ -40,7 +36,6 @@ import net.runelite.api.events.WallObjectSpawned;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -48,45 +43,64 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 @PluginDescriptor(
 	name = "Cubed's Raeun Agility",
-	description = "Prison of Raeun agility course: obstacle outlines, charged jump click counter, lap times for the fast and slow routes, XP per hour and chest loot",
+	description = "Prison of Raeun agility course: obstacle outlines, charged jump click counts, lap timer, XP per hour and chest loot",
 	tags = {"agility", "raeun", "graveyard", "prison", "course", "lap", "marks", "cubed"}
 )
 public class RaeunPlugin extends Plugin
 {
-	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
-	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
-	private static final int FIRST_CHARGED_GAP = 63585;
+	private static final int[][] OBSTACLES = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63621, 63623}, {63636, 63636}};
 	private static final int[] SLOW_GAPS = {63573, 63582};
-	private static final int[][] SHARED_GAPS = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63614, 63615}, {63621, 63623}, {63636, 63636}};
+	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
+	private static final int FIRST_CHARGED_GAP = 63585;
+	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
 	private static final int STEPPING_STONE = 63595;
-	private static final int SOLID_STONE = 63484;
 	private static final int CHEST = 63481;
-	private static final int STONE_LOOKUP_TRIES = 5;
+
 	private static final int[][] STONE_GRIDS = {
 		{2683, 16930, 10544, 17, -1, 1},
 		{2754, 16919, 10518, 11, 1, 0},
 	};
 
-	static final int SUNKEN_TREASURE = 35033;
-	static final int GRACEFUL_KIT = 35027;
-	static final int FREMENNIK_FABRIC = 35029;
-	static final int GHOSTLY_FABRIC = 35031;
-	private static final int[] LOOT_IDS = {SUNKEN_TREASURE, GRACEFUL_KIT, FREMENNIK_FABRIC, GHOSTLY_FABRIC};
-
+	private static final int SUNKEN_TREASURE = 35033;
 	private static final int INVENTORY = 93;
 	private static final int CHARGE_WINDOW_TICKS = 10;
 	private static final int CHARGE_STALE_TICKS = 40;
-	private static final int DEFAULT_LAP_XP = 2298;
+	private static final int LAP_FINISH_XP = 900;
+	private static final int WHOLE_LAP_XP = 1500;
+	private static final int MAX_XP_DROP = 5000;
+	private static final int IDLE_TICKS = 300;
+	private static final String BEST_KEY = "bestLap";
 
-	enum Route
+	enum Kind
 	{
-		FAST("Fast"), MIXED("Mixed"), SLOW("Slow"), PARTIAL("Partial");
+		OBSTACLE, SLOW, CHARGED, STONE, CHEST
+	}
 
-		final String label;
+	static final class Tracked
+	{
+		final Kind kind;
+		final int x;
+		final int y;
+		int rowVarbit;
+		int column;
+		boolean solidWhenPicked;
+		boolean solid = true;
 
-		Route(String label)
+		Tracked(TileObject o, Kind kind)
 		{
-			this.label = label;
+			this.kind = kind;
+			WorldView wv = o.getWorldView();
+			if (o instanceof GameObject)
+			{
+				net.runelite.api.Point min = ((GameObject) o).getSceneMinLocation();
+				x = wv.getBaseX() + min.getX();
+				y = wv.getBaseY() + min.getY();
+			}
+			else
+			{
+				x = wv.getBaseX() + o.getLocalLocation().getSceneX();
+				y = wv.getBaseY() + o.getLocalLocation().getSceneY();
+			}
 		}
 	}
 
@@ -95,73 +109,16 @@ public class RaeunPlugin extends Plugin
 		final int id;
 		final int x;
 		final int y;
-		final int plane;
 		int clicks = 1;
 		int lastClickTick;
 
-		Charge(int id, int x, int y, int plane, int tick)
+		Charge(int id, int x, int y, int tick)
 		{
 			this.id = id;
 			this.x = x;
 			this.y = y;
-			this.plane = plane;
 			this.lastClickTick = tick;
 		}
-
-		String key()
-		{
-			return x + "," + y + "," + plane;
-		}
-	}
-
-	enum Kind
-	{
-		FAST, SLOW, SHARED, CHEST
-	}
-
-	static final class Tracked
-	{
-		final Kind kind;
-		final boolean stone;
-		final int sx;
-		final int sy;
-		final int x;
-		final int y;
-		final String key;
-		boolean solid = true;
-		int stoneId = -1;
-		int lookups;
-		int rowVarbit;
-		int column;
-		boolean solidWhenPicked;
-
-		Tracked(TileObject o, Kind kind, boolean stone)
-		{
-			this.kind = kind;
-			this.stone = stone;
-			WorldView wv = o.getWorldView();
-			if (o instanceof GameObject)
-			{
-				net.runelite.api.Point min = ((GameObject) o).getSceneMinLocation();
-				sx = min.getX();
-				sy = min.getY();
-			}
-			else
-			{
-				sx = o.getLocalLocation().getSceneX();
-				sy = o.getLocalLocation().getSceneY();
-			}
-			x = wv.getBaseX() + sx;
-			y = wv.getBaseY() + sy;
-			key = x + "," + y + "," + o.getPlane();
-		}
-	}
-
-	static final class Learned
-	{
-		int xp;
-		int clicks;
-		boolean confirmed;
 	}
 
 	@Inject
@@ -180,44 +137,27 @@ public class RaeunPlugin extends Plugin
 	private RaeunPanelOverlay panelOverlay;
 
 	final Map<TileObject, Tracked> objects = new IdentityHashMap<>();
-	final Map<String, Learned> learned = new HashMap<>();
-	final ArrayDeque<Charge> charges = new ArrayDeque<>();
-	private final Set<Integer> obstacleIds = new HashSet<>();
 	private final Map<Integer, Kind> kinds = new HashMap<>();
+	private final ArrayDeque<Charge> charges = new ArrayDeque<>();
 	private boolean stonesInScene;
-	private final Map<Integer, Integer> inventoryCounts = new HashMap<>();
-	private boolean inventoryKnown;
 
-	private int lastAgilityXp = -1;
-	private int lastThievingXp = -1;
+	private int lastAgilityXp;
+	private int lastThievingXp;
+	private int treasureHeld = -1;
 
 	int sessionXp;
 	int activeTicks;
 	int lastXpTick = -1;
 	int laps;
-	final int[] routeLaps = new int[Route.values().length];
-	int timedLaps;
-	int timedLapTicks;
-	int timedLapXp;
-	int chestsOpened;
 	int treasure;
-	int kits;
-	int fabrics;
-	int ghostlyFabrics;
 
 	int lapStartTick = -1;
 	int lapXp;
 	boolean chestLooted;
 
-	int lastLapTicks = -1;
-	Route lastLapRoute;
+	int lastLapTicks;
 	boolean lastLapWasBest;
-	int lastJumpClicks;
-	int lastJumpXp;
-	boolean lastJumpHalf;
-	int lastJumpTick = -1;
-
-	final int[] best = new int[Route.values().length];
+	int bestLapTicks;
 
 	@Provides
 	RaeunConfig provideConfig(ConfigManager manager)
@@ -228,9 +168,28 @@ public class RaeunPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
-		rebuildIds();
-		loadLearned();
-		loadBests();
+		for (int[] r : OBSTACLES)
+		{
+			for (int id = r[0]; id <= r[1]; id++)
+			{
+				kinds.put(id, Kind.OBSTACLE);
+			}
+		}
+		for (int id : SLOW_GAPS)
+		{
+			kinds.put(id, Kind.SLOW);
+		}
+		for (int[] r : CHARGED_GAPS)
+		{
+			for (int id = r[0]; id <= r[1]; id++)
+			{
+				kinds.put(id, Kind.CHARGED);
+			}
+		}
+		kinds.put(STEPPING_STONE, Kind.STONE);
+		kinds.put(CHEST, Kind.CHEST);
+
+		loadBest();
 		resetSession();
 		overlayManager.add(sceneOverlay);
 		overlayManager.add(panelOverlay);
@@ -240,7 +199,7 @@ public class RaeunPlugin extends Plugin
 			{
 				lastAgilityXp = client.getSkillExperience(Skill.AGILITY);
 				lastThievingXp = client.getSkillExperience(Skill.THIEVING);
-				readInventory(client.getItemContainer(INVENTORY));
+				treasureHeld = countTreasure(client.getItemContainer(INVENTORY));
 				scanScene();
 			}
 		});
@@ -253,6 +212,7 @@ public class RaeunPlugin extends Plugin
 		overlayManager.remove(panelOverlay);
 		objects.clear();
 		charges.clear();
+		kinds.clear();
 	}
 
 	void resetSession()
@@ -261,22 +221,12 @@ public class RaeunPlugin extends Plugin
 		activeTicks = 0;
 		lastXpTick = -1;
 		laps = 0;
-		java.util.Arrays.fill(routeLaps, 0);
-		timedLaps = 0;
-		timedLapTicks = 0;
-		timedLapXp = 0;
-		chestsOpened = 0;
 		treasure = 0;
-		kits = 0;
-		fabrics = 0;
-		ghostlyFabrics = 0;
 		lapStartTick = -1;
 		lapXp = 0;
 		chestLooted = false;
-		lastLapTicks = -1;
-		lastLapRoute = null;
+		lastLapTicks = 0;
 		lastLapWasBest = false;
-		lastJumpTick = -1;
 		charges.clear();
 	}
 
@@ -285,186 +235,41 @@ public class RaeunPlugin extends Plugin
 		return !objects.isEmpty();
 	}
 
-
-	private void rebuildIds()
-	{
-		kinds.clear();
-		for (int id : parseIds(config.extraIds()))
-		{
-			kinds.put(id, Kind.SHARED);
-		}
-		for (int[] r : SHARED_GAPS)
-		{
-			for (int i = r[0]; i <= r[1]; i++)
-			{
-				kinds.put(i, Kind.SHARED);
-			}
-		}
-		for (int id : SLOW_GAPS)
-		{
-			kinds.put(id, Kind.SLOW);
-		}
-		kinds.put(STEPPING_STONE, Kind.SHARED);
-		for (int[] r : CHARGED_GAPS)
-		{
-			for (int i = r[0]; i <= r[1]; i++)
-			{
-				kinds.put(i, Kind.FAST);
-			}
-		}
-		kinds.put(CHEST, Kind.CHEST);
-		kinds.keySet().removeAll(parseIds(config.ignoreIds()));
-		obstacleIds.clear();
-		obstacleIds.addAll(kinds.keySet());
-		obstacleIds.remove(CHEST);
-	}
-
-	static int wikiClicks(int id)
+	static int clicksNeeded(int id)
 	{
 		int i = id - FIRST_CHARGED_GAP;
 		return i >= 0 && i < CHARGED_CLICKS.length ? CHARGED_CLICKS[i] : 0;
 	}
 
-	int clicksNeeded(int id, String key)
+	Charge currentCharge()
 	{
-		int known = wikiClicks(id);
-		if (known > 0)
+		Charge c = charges.peekLast();
+		if (c == null || client.getTickCount() - c.lastClickTick > CHARGE_STALE_TICKS)
 		{
-			return known;
+			return null;
 		}
-		Learned l = config.learnGaps() ? learned.get(key) : null;
-		return l != null && l.clicks > 1 ? l.clicks : 0;
+		return c;
 	}
 
-	boolean clicksConfirmed(int id, String key)
+	boolean chestOpenable(TileObject o)
 	{
-		if (wikiClicks(id) > 0)
+		ObjectComposition comp = client.getObjectDefinition(o.getId());
+		if (comp != null && comp.getImpostorIds() != null)
 		{
-			return true;
+			comp = comp.getImpostor();
 		}
-		Learned l = config.learnGaps() ? learned.get(key) : null;
-		return l != null && l.confirmed;
-	}
-
-	private void refreshStones()
-	{
-		boolean swap = config.swapStones();
-		for (Map.Entry<TileObject, Tracked> en : objects.entrySet())
+		if (comp == null || comp.getActions() == null)
 		{
-			Tracked t = en.getValue();
-			if (!t.stone)
-			{
-				continue;
-			}
-			if (t.lookups == 0)
-			{
-				locateStone(en.getKey(), t);
-			}
-			if (t.rowVarbit > 0)
-			{
-				boolean picked = client.getVarbitValue(t.rowVarbit) == t.column;
-				t.solid = (picked == t.solidWhenPicked) != swap;
-				t.lookups = 1;
-				continue;
-			}
-			if (t.stoneId < 0 && t.lookups < STONE_LOOKUP_TRIES)
-			{
-				t.lookups++;
-				t.stoneId = findStoneBelow(en.getKey(), t);
-			}
-			if (t.stoneId < 0)
-			{
-				continue;
-			}
-			ObjectComposition shown = client.getObjectDefinition(t.stoneId).getImpostor();
-			t.solid = shown == null || (shown.getId() == SOLID_STONE) != swap;
+			return false;
 		}
-	}
-
-	private void locateStone(TileObject gap, Tracked t)
-	{
-		WorldPoint p = WorldPoint.fromLocalInstance(client, gap.getLocalLocation());
-		if (p == null)
+		for (String action : comp.getActions())
 		{
-			return;
-		}
-		int x = p.getX();
-		int y = p.getY();
-		for (int[] g : STONE_GRIDS)
-		{
-			int row = (y - g[2]) / 2 * g[4];
-			if (x >= g[0] && x < g[0] + 3 && (y - g[2]) % 2 == 0 && row >= 0 && row < g[3])
+			if ("Open".equals(action))
 			{
-				t.rowVarbit = g[1] + row;
-				t.column = x - g[0];
-				t.solidWhenPicked = g[5] == 1;
-				return;
+				return true;
 			}
 		}
-	}
-
-	private int findStoneBelow(TileObject gap, Tracked t)
-	{
-		Tile[][][] tiles = gap.getWorldView().getScene().getTiles();
-		for (Tile[][] plane : tiles)
-		{
-			Tile tile = plane[t.sx][t.sy];
-			while (tile != null)
-			{
-				int id = stoneOn(tile);
-				if (id >= 0)
-				{
-					return id;
-				}
-				tile = tile.getBridge();
-			}
-		}
-		return -1;
-	}
-
-	private int stoneOn(Tile tile)
-	{
-		if (tile.getGameObjects() == null)
-		{
-			return -1;
-		}
-		for (GameObject below : tile.getGameObjects())
-		{
-			if (below == null)
-			{
-				continue;
-			}
-			int[] variants = client.getObjectDefinition(below.getId()).getImpostorIds();
-			if (variants == null)
-			{
-				continue;
-			}
-			for (int v : variants)
-			{
-				if (v == SOLID_STONE)
-				{
-					return below.getId();
-				}
-			}
-		}
-		return -1;
-	}
-
-	private static Set<Integer> parseIds(String text)
-	{
-		Set<Integer> out = new HashSet<>();
-		if (text == null)
-		{
-			return out;
-		}
-		for (String part : text.split("[^0-9]+"))
-		{
-			if (!part.isEmpty() && part.length() < 8)
-			{
-				out.add(Integer.parseInt(part));
-			}
-		}
-		return out;
+		return false;
 	}
 
 	private void scanScene()
@@ -472,11 +277,7 @@ public class RaeunPlugin extends Plugin
 		objects.clear();
 		stonesInScene = false;
 		WorldView wv = client.getTopLevelWorldView();
-		if (wv == null)
-		{
-			return;
-		}
-		Scene scene = wv.getScene();
+		Scene scene = wv == null ? null : wv.getScene();
 		if (scene == null)
 		{
 			return;
@@ -513,45 +314,51 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		int id = o.getId();
-		Kind kind = kinds.get(id);
-		if (kind != null)
+		Kind kind = kinds.get(o.getId());
+		if (kind == null)
 		{
-			boolean stone = id == STEPPING_STONE;
-			objects.put(o, new Tracked(o, kind, stone));
-			stonesInScene |= stone;
+			return;
 		}
+		Tracked t = new Tracked(o, kind);
+		if (kind == Kind.STONE)
+		{
+			placeOnGrid(o, t);
+			stonesInScene = true;
+		}
+		objects.put(o, t);
 	}
 
-	boolean chestOpenable(TileObject o)
+	private void placeOnGrid(TileObject stone, Tracked t)
 	{
-		ObjectComposition comp = client.getObjectDefinition(o.getId());
-		if (comp != null && comp.getImpostorIds() != null)
+		WorldPoint p = WorldPoint.fromLocalInstance(client, stone.getLocalLocation());
+		if (p == null)
 		{
-			comp = comp.getImpostor();
+			return;
 		}
-		if (comp == null || comp.getActions() == null)
+		for (int[] g : STONE_GRIDS)
 		{
-			return false;
-		}
-		for (String action : comp.getActions())
-		{
-			if ("Open".equals(action))
+			int dy = p.getY() - g[2];
+			int row = dy / 2 * g[4];
+			if (p.getX() >= g[0] && p.getX() < g[0] + 3 && dy % 2 == 0 && row >= 0 && row < g[3])
 			{
-				return true;
+				t.rowVarbit = g[1] + row;
+				t.column = p.getX() - g[0];
+				t.solidWhenPicked = g[5] == 1;
+				return;
 			}
 		}
-		return false;
 	}
 
-	Charge currentCharge()
+	private void refreshStones()
 	{
-		Charge c = charges.peekLast();
-		if (c == null || client.getTickCount() - c.lastClickTick > CHARGE_STALE_TICKS)
+		for (Tracked t : objects.values())
 		{
-			return null;
+			if (t.rowVarbit > 0)
+			{
+				boolean picked = client.getVarbitValue(t.rowVarbit) == t.column;
+				t.solid = picked == t.solidWhenPicked;
+			}
 		}
-		return c;
 	}
 
 	@Subscribe
@@ -613,9 +420,9 @@ public class RaeunPlugin extends Plugin
 		}
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
 		{
-			lastAgilityXp = -1;
-			lastThievingXp = -1;
-			inventoryKnown = false;
+			lastAgilityXp = 0;
+			lastThievingXp = 0;
+			treasureHeld = -1;
 			lapStartTick = -1;
 			charges.clear();
 		}
@@ -624,36 +431,8 @@ public class RaeunPlugin extends Plugin
 	@Subscribe
 	public void onRuneScapeProfileChanged(RuneScapeProfileChanged e)
 	{
-		loadBests();
+		loadBest();
 	}
-
-	@Subscribe
-	public void onConfigChanged(ConfigChanged e)
-	{
-		if (!RaeunConfig.GROUP.equals(e.getGroup()))
-		{
-			return;
-		}
-		String key = e.getKey();
-		if ("extraIds".equals(key) || "ignoreIds".equals(key))
-		{
-			rebuildIds();
-			clientThread.invoke(() ->
-			{
-				if (client.getGameState() == GameState.LOGGED_IN)
-				{
-					scanScene();
-				}
-			});
-		}
-		else if ("forgetGaps".equals(key) && config.forgetGaps())
-		{
-			learned.clear();
-			saveLearned();
-			configManager.setConfiguration(RaeunConfig.GROUP, "forgetGaps", "false");
-		}
-	}
-
 
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked e)
@@ -666,7 +445,8 @@ public class RaeunPlugin extends Plugin
 			return;
 		}
 		int id = e.getId();
-		if (!obstacleIds.contains(id))
+		Kind kind = kinds.get(id);
+		if (kind == null || kind == Kind.CHEST)
 		{
 			return;
 		}
@@ -675,16 +455,15 @@ public class RaeunPlugin extends Plugin
 		{
 			startLap(tick);
 		}
-		if (kinds.get(id) != Kind.FAST)
+		if (kind != Kind.CHARGED)
 		{
 			return;
 		}
 		WorldView wv = client.getTopLevelWorldView();
 		int x = wv.getBaseX() + e.getParam0();
 		int y = wv.getBaseY() + e.getParam1();
-		int plane = wv.getPlane();
 		Charge last = charges.peekLast();
-		if (last != null && last.id == id && last.x == x && last.y == y && last.plane == plane
+		if (last != null && last.id == id && last.x == x && last.y == y
 			&& tick - last.lastClickTick <= CHARGE_WINDOW_TICKS)
 		{
 			last.clicks++;
@@ -692,7 +471,7 @@ public class RaeunPlugin extends Plugin
 		}
 		else
 		{
-			charges.addLast(new Charge(id, x, y, plane, tick));
+			charges.addLast(new Charge(id, x, y, tick));
 		}
 	}
 
@@ -708,12 +487,11 @@ public class RaeunPlugin extends Plugin
 	{
 		if (e.getSkill() == Skill.THIEVING)
 		{
-			int gained = lastThievingXp < 0 ? 0 : e.getXp() - lastThievingXp;
+			int gained = xpGain(lastThievingXp, e.getXp());
 			lastThievingXp = e.getXp();
 			if (gained > 0 && onCourse())
 			{
 				chestLooted = true;
-				chestsOpened++;
 			}
 			return;
 		}
@@ -721,7 +499,7 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		int gained = lastAgilityXp < 0 ? 0 : e.getXp() - lastAgilityXp;
+		int gained = xpGain(lastAgilityXp, e.getXp());
 		lastAgilityXp = e.getXp();
 		if (gained <= 0 || !onCourse())
 		{
@@ -735,117 +513,35 @@ public class RaeunPlugin extends Plugin
 			startLap(tick);
 		}
 		lapXp += gained;
-
-		boolean finish = gained >= config.lapFinishXp();
-		creditJump(gained, tick, finish);
-		if (finish)
+		charges.pollFirst();
+		if (gained >= LAP_FINISH_XP)
 		{
 			finishLap(tick);
 		}
 	}
 
-	private void creditJump(int gained, int tick, boolean finish)
+	private static int xpGain(int before, int now)
 	{
-		Charge c = null;
-		while (!charges.isEmpty())
-		{
-			Charge head = charges.pollFirst();
-			if (tick - head.lastClickTick <= CHARGE_STALE_TICKS)
-			{
-				c = head;
-				break;
-			}
-		}
-		if (c == null || finish)
-		{
-			return;
-		}
-		Player me = client.getLocalPlayer();
-		if (me == null || me.getWorldLocation().distanceTo(new WorldPoint(c.x, c.y, c.plane)) > 10)
-		{
-			return;
-		}
-		lastJumpClicks = c.clicks;
-		lastJumpXp = gained;
-		lastJumpTick = tick;
-		lastJumpHalf = false;
-
-		Learned l = learned.get(c.key());
-		if (l == null)
-		{
-			l = new Learned();
-			l.xp = gained;
-			l.clicks = c.clicks;
-			learned.put(c.key(), l);
-		}
-		else if (gained > l.xp)
-		{
-			l.xp = gained;
-			l.clicks = c.clicks;
-			l.confirmed = true;
-		}
-		else if (gained < l.xp)
-		{
-			l.confirmed = true;
-			lastJumpHalf = true;
-		}
-		else if (c.clicks < l.clicks)
-		{
-			l.clicks = c.clicks;
-		}
-		else
-		{
-			return;
-		}
-		if (config.learnGaps())
-		{
-			saveLearned();
-		}
+		int gained = now - before;
+		return before > 0 && gained > 0 && gained <= MAX_XP_DROP ? gained : 0;
 	}
 
 	private void finishLap(int tick)
 	{
 		int ticks = tick - lapStartTick;
-		Route route;
-		if (lapXp < config.lapFinishXp() + 600)
-		{
-			route = Route.PARTIAL;
-		}
-		else if (lapXp <= config.fastMaxXp())
-		{
-			route = Route.FAST;
-		}
-		else if (lapXp >= config.slowMinXp())
-		{
-			route = Route.SLOW;
-		}
-		else
-		{
-			route = Route.MIXED;
-		}
+		boolean whole = lapXp >= WHOLE_LAP_XP && ticks > 0;
 		laps++;
-		routeLaps[route.ordinal()]++;
-		lastLapRoute = route;
-		lastLapTicks = ticks;
+		lastLapTicks = whole ? ticks : 0;
 		lastLapWasBest = false;
-		if (route != Route.PARTIAL)
+		if (whole && (bestLapTicks <= 0 || ticks < bestLapTicks))
 		{
-			timedLaps++;
-			timedLapTicks += ticks;
-			timedLapXp += lapXp;
-			int old = best[route.ordinal()];
-			if (old <= 0 || ticks < old)
-			{
-				best[route.ordinal()] = ticks;
-				lastLapWasBest = old > 0;
-				configManager.setRSProfileConfiguration(RaeunConfig.GROUP, "best" + route.label, ticks);
-			}
+			lastLapWasBest = bestLapTicks > 0;
+			bestLapTicks = ticks;
+			configManager.setRSProfileConfiguration(RaeunConfig.GROUP, BEST_KEY, ticks);
 		}
-		if (config.lapChatMessage())
+		if (whole && config.lapChatMessage())
 		{
-			String text = "Raeun lap " + laps + " (" + route.label.toLowerCase() + "): "
-				+ (route == Route.PARTIAL ? "not timed, started part way" : formatTicks(ticks) + ", " + lapXp + " xp")
-				+ (lastLapWasBest ? ". New best" : "") + ".";
+			String text = "Raeun lap " + laps + ": " + formatTicks(ticks) + (lastLapWasBest ? ". New best." : ".");
 			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", text, null);
 		}
 		lapStartTick = -1;
@@ -864,13 +560,11 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		int idle = client.getTickCount() - lastXpTick;
-		int limit = config.idleMinutes() * 100;
-		if (idle <= limit)
+		if (client.getTickCount() - lastXpTick <= IDLE_TICKS)
 		{
 			activeTicks++;
 		}
-		else if (lapStartTick >= 0)
+		else
 		{
 			lapStartTick = -1;
 			lapXp = 0;
@@ -880,79 +574,50 @@ public class RaeunPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged e)
 	{
-		if (e.getContainerId() == INVENTORY)
-		{
-			readInventory(e.getItemContainer());
-		}
-	}
-
-	private void readInventory(ItemContainer container)
-	{
-		if (container == null)
+		if (e.getContainerId() != INVENTORY)
 		{
 			return;
 		}
-		Map<Integer, Integer> now = new HashMap<>();
+		int held = countTreasure(e.getItemContainer());
+		if (treasureHeld >= 0 && held > treasureHeld && onCourse())
+		{
+			treasure += held - treasureHeld;
+		}
+		treasureHeld = held;
+	}
+
+	private static int countTreasure(ItemContainer container)
+	{
+		if (container == null)
+		{
+			return -1;
+		}
+		int count = 0;
 		for (Item item : container.getItems())
 		{
-			for (int id : LOOT_IDS)
+			if (item.getId() == SUNKEN_TREASURE)
 			{
-				if (item.getId() == id)
-				{
-					now.merge(id, item.getQuantity(), Integer::sum);
-				}
+				count += item.getQuantity();
 			}
 		}
-		if (inventoryKnown && onCourse())
-		{
-			treasure += gain(now, SUNKEN_TREASURE);
-			kits += gain(now, GRACEFUL_KIT);
-			fabrics += gain(now, FREMENNIK_FABRIC);
-			ghostlyFabrics += gain(now, GHOSTLY_FABRIC);
-		}
-		inventoryCounts.clear();
-		inventoryCounts.putAll(now);
-		inventoryKnown = true;
+		return count;
 	}
 
-	private int gain(Map<Integer, Integer> now, int id)
-	{
-		return Math.max(0, now.getOrDefault(id, 0) - inventoryCounts.getOrDefault(id, 0));
-	}
-
-
-	double activeHours()
+	private double activeHours()
 	{
 		return activeTicks * 0.6 / 3600.0;
 	}
 
 	int xpPerHour()
 	{
-		double h = activeHours();
-		return h < 0.002 ? 0 : (int) Math.round(sessionXp / h);
+		double hours = activeHours();
+		return hours < 0.002 ? 0 : (int) Math.round(sessionXp / hours);
 	}
 
-	double perHour(int count)
+	double treasurePerHour()
 	{
-		double h = activeHours();
-		return h < 0.002 ? 0 : count / h;
-	}
-
-	int averageLapXp()
-	{
-		return timedLaps == 0 ? DEFAULT_LAP_XP : timedLapXp / timedLaps;
-	}
-
-	int lapsToLevel()
-	{
-		int xp = client.getSkillExperience(Skill.AGILITY);
-		int level = Experience.getLevelForXp(xp);
-		if (level >= 99)
-		{
-			return -1;
-		}
-		int left = Experience.getXpForLevel(level + 1) - xp;
-		return (int) Math.ceil(left / (double) averageLapXp());
+		double hours = activeHours();
+		return hours < 0.002 ? 0 : treasure / hours;
 	}
 
 	static String formatTicks(int ticks)
@@ -963,65 +628,20 @@ public class RaeunPlugin extends Plugin
 		return minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "." + (tenths % 10);
 	}
 
-
-	private void loadBests()
+	private void loadBest()
 	{
-		for (Route r : Route.values())
+		bestLapTicks = 0;
+		String saved = configManager.getRSProfileConfiguration(RaeunConfig.GROUP, BEST_KEY);
+		if (saved != null)
 		{
-			best[r.ordinal()] = 0;
-			String v = configManager.getRSProfileConfiguration(RaeunConfig.GROUP, "best" + r.label);
-			if (v != null)
-			{
-				try
-				{
-					best[r.ordinal()] = Integer.parseInt(v.trim());
-				}
-				catch (NumberFormatException ignored)
-				{
-					best[r.ordinal()] = 0;
-				}
-			}
-		}
-	}
-
-	private void loadLearned()
-	{
-		learned.clear();
-		String raw = configManager.getConfiguration(RaeunConfig.GROUP, "gapData");
-		if (raw == null)
-		{
-			return;
-		}
-		for (String entry : raw.split(";"))
-		{
-			String[] p = entry.split(":");
-			if (p.length != 4)
-			{
-				continue;
-			}
 			try
 			{
-				Learned l = new Learned();
-				l.xp = Integer.parseInt(p[1]);
-				l.clicks = Integer.parseInt(p[2]);
-				l.confirmed = "1".equals(p[3]);
-				learned.put(p[0], l);
+				bestLapTicks = Integer.parseInt(saved.trim());
 			}
-			catch (NumberFormatException ignored)
+			catch (NumberFormatException ex)
 			{
+				bestLapTicks = 0;
 			}
 		}
-	}
-
-	private void saveLearned()
-	{
-		StringBuilder sb = new StringBuilder();
-		for (Map.Entry<String, Learned> en : learned.entrySet())
-		{
-			Learned l = en.getValue();
-			sb.append(en.getKey()).append(':').append(l.xp).append(':').append(l.clicks)
-				.append(':').append(l.confirmed ? '1' : '0').append(';');
-		}
-		configManager.setConfiguration(RaeunConfig.GROUP, "gapData", sb.toString());
 	}
 }

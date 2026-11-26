@@ -1,40 +1,27 @@
 # Cubed's Raeun Agility
 
-A RuneLite plugin for the Prison of Raeun agility course on The Graveyard (65 Agility, released 25 November 2026).
+A RuneLite plugin for the Prison of Raeun agility course on The Graveyard (65 Agility).
 
-## What it shows
+## On the course
 
-**On the course**
+Every obstacle you can click is outlined, coloured by what it is:
 
-- An outline on every obstacle, fast route and slow route alike.
-- Only the stepping stones that hold your weight are outlined. The loose planks beside them are left alone.
-- On each charged jump, the clicks it needs and a counter while you charge it, for example `2 / 4`.
-- The reward chest, outlined during a lap until you loot it. Needs 65 Thieving.
+| Colour | Meaning |
+| --- | --- |
+| Amber | Gaps every lap passes |
+| Green | Fast route. In each row of three stones only the real one is outlined |
+| Red | Gaps that start the slow way round |
+| Cyan | Charged jumps, labelled with the clicks they need |
+| Pink | The reward chest, until you loot it (65 Thieving) |
 
-**In the info box**
+The charged jumps are 2-4-3-2 in the first section and 2-4-2 in the last. While you charge one it turns white and counts your clicks, for example `2 / 4`.
 
-- Current lap, last lap, session average and your best time for each route.
-- Laps, laps per hour, XP gained and XP per hour. The clock pauses after 3 minutes without Agility XP.
-- Laps left to your next Agility level.
-- Chests opened and sunken treasure per hour (Volf Olafson trades each one for a mark of grace), plus graceful kits and sail fabric.
-- The click order for both charged jump sections: 2-4-3-2, then 2-4-2.
+## Info box
+
+Current lap, last lap, best lap, laps, XP per hour and sunken treasure. The best lap is saved per account. The hourly clock pauses after 3 minutes without Agility XP, and a lap you joined part way through is counted but not timed.
 
 Shift + right-click the info box to reset the session.
 
-## Fast and slow routes
+## Settings
 
-A lap is sorted by the Agility XP it gave. Taking every charged jump is worth 2,298 XP and counts as fast. Skipping all of them is worth 2,960 XP and counts as slow. Anything between is mixed. Each route keeps its own best time, saved per account.
-
-A lap you joined part way through is counted but not timed.
-
-## Charged jumps
-
-Each charged jump starts with the click count from the wiki, shown as `x4?`. A wrong count still completes the jump, for half the XP, and the plugin uses that to check the number: it remembers the click count that paid the most at that gap. The `?` goes once the gap has paid two different amounts, which is when the plugin knows which count was right.
-
-Learned counts are shared between accounts. "Forget learned gaps" in the Advanced settings clears them.
-
-## Settings worth knowing
-
-- **Lap finish XP** (default 900). A single Agility drop this large ends the lap. The last gap gives 948.
-- **Swap stepping stones.** Tick it if the outline lands on the loose planks.
-- **Extra obstacle ids / Ignored ids.** Add or remove object ids if an obstacle is missed or something is outlined by mistake.
+Four switches (obstacle outlines, chest outline, info box, lap time in chat) and a colour for each outline.
