@@ -23,6 +23,8 @@ class RaeunSceneOverlay extends Overlay
 	private static final BasicStroke THIN = new BasicStroke(1.5f);
 	private static final BasicStroke THICK = new BasicStroke(2.5f);
 	private static final BasicStroke HEAVY = new BasicStroke(4f);
+	private static final Color READY = new Color(0x5E, 0xE0, 0x7A);
+	private static final Color OVER = new Color(0xFF, 0x4D, 0x4D);
 	private static final int FILL = 35;
 	private static final int CHEST_FILL = 110;
 	private static final int REACH = 30;
@@ -94,7 +96,7 @@ class RaeunSceneOverlay extends Overlay
 					int need = RaeunPlugin.clicksNeeded(o.getId());
 					if (charge != null && charge.id == o.getId() && charge.x == t.x && charge.y == t.y)
 					{
-						color = Color.WHITE;
+						color = need <= 0 || charge.clicks < need ? Color.WHITE : charge.clicks == need ? READY : OVER;
 						label = need > 0 ? charge.clicks + " / " + need : String.valueOf(charge.clicks);
 						stroke = THICK;
 					}

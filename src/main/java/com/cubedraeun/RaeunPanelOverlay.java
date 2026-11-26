@@ -69,7 +69,7 @@ class RaeunPanelOverlay extends OverlayPanel
 		if (charge != null)
 		{
 			int need = RaeunPlugin.clicksNeeded(charge.id);
-			line("Clicks", charge.clicks + (need > 0 ? " / " + need : ""), need > 0 && charge.clicks > need ? BAD : GOOD);
+			line("Clicks", charge.clicks + (need > 0 ? " / " + need : ""), need <= 0 || charge.clicks < need ? Color.WHITE : charge.clicks == need ? GOOD : BAD);
 		}
 		return super.render(g);
 	}
