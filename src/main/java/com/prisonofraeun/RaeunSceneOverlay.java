@@ -64,6 +64,9 @@ class RaeunSceneOverlay extends Overlay
 		final int FILL = Math.max(0, Math.min(255, config.fillOpacity()));
 		final int CHEST_FILL = Math.min(255, FILL * 2);
 		int reach = Math.max(1, config.highlightDistance());
+		RaeunConfig.Highlight mode = config.highlight();
+		// While the final jump is held back for the chest, an outline on it would only mislead.
+		boolean jumpHeldBack = plugin.hideFinalJump();
 		g.setFont(config.labelSize().font());
 
 		for (Map.Entry<TileObject, RaeunPlugin.Tracked> en : plugin.objects.entrySet())
@@ -72,6 +75,10 @@ class RaeunSceneOverlay extends Overlay
 			RaeunPlugin.Tracked t = en.getValue();
 			boolean chest = t.kind == RaeunPlugin.Kind.CHEST;
 			if (chest ? !chestWanted : !obstacles)
+			{
+				continue;
+			}
+			if (!chest && (!RaeunPlugin.outlined(mode, t.kind, o.getId(), t.lineFirst) || (jumpHeldBack && o.getId() == RaeunPlugin.FINAL_JUMP)))
 			{
 				continue;
 			}
@@ -118,10 +125,6 @@ class RaeunSceneOverlay extends Overlay
 					color = config.fastColor();
 					break;
 				case SLOW:
-					if (!config.showSlowRoute())
-					{
-						continue;
-					}
 					color = config.slowColor();
 					break;
 				default:

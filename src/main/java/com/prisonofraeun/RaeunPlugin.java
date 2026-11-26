@@ -60,6 +60,10 @@ public class RaeunPlugin extends Plugin
 	// Obstacles only the fast route uses.
 	private static final int[] FAST_GAPS = {63584, 63589, 63593, 63594};
 	static final int START = 63570;
+	// Charged jumps on the course itself, which only the fast route uses.
+	private static final int[] COURSE_CHARGED = {63585, 63592};
+	private static final String OLD_SLOW_KEY = "showSlowRoute";
+	private static final String HIGHLIGHT_KEY = "highlight";
 	private static final Pattern LAP_DURATION = Pattern.compile("Lap duration: ([\\d:.]+)");
 	private static final Pattern PERSONAL_BEST = Pattern.compile("Personal best: ([\\d:.]+)");
 	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
@@ -67,7 +71,12 @@ public class RaeunPlugin extends Plugin
 	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
 	private static final int STEPPING_STONE = 63595;
 	private static final int CHEST = 63481;
-	private static final int FINAL_JUMP = 63583;
+	static final int FINAL_JUMP = 63583;
+	// The line of stones after the second gap. Clicking the first one carries you across the whole line.
+	private static final int LINE_STONE = 63596;
+	private static final int LINE_END = 63572;
+	private static final int LINE_FIRST_X = 2733;
+	private static final int LINE_FIRST_Y = 10512;
 	static final int CHEST_THIEVING = 65;
 
 	private static final int[][] STONE_GRIDS = {
@@ -97,6 +106,7 @@ public class RaeunPlugin extends Plugin
 		int column;
 		boolean solidWhenPicked;
 		boolean solid = true;
+		boolean lineFirst;
 
 		Tracked(Kind kind)
 		{
@@ -181,6 +191,7 @@ public class RaeunPlugin extends Plugin
 		kinds.put(STEPPING_STONE, Kind.STONE);
 		kinds.put(CHEST, Kind.CHEST);
 
+		migrateSlowRouteSwitch();
 		loadBest();
 		resetSession();
 		overlayManager.add(sceneOverlay);
@@ -229,6 +240,40 @@ public class RaeunPlugin extends Plugin
 	{
 		int i = id - FIRST_CHARGED_GAP;
 		return i >= 0 && i < CHARGED_CLICKS.length ? CHARGED_CLICKS[i] : 0;
+	}
+
+	// Whether an obstacle is outlined under the chosen setting. The chest has its own switch.
+	static boolean outlined(RaeunConfig.Highlight mode, Kind kind, int id, boolean lineFirst)
+	{
+		if (mode == RaeunConfig.Highlight.FAST)
+		{
+			return kind != Kind.SLOW;
+		}
+		if (mode == RaeunConfig.Highlight.SLOW)
+		{
+			if (id == LINE_STONE || id == LINE_END)
+			{
+				return lineFirst;
+			}
+			// Shared obstacles and the slow gaps. The shortcuts, charged jumps and rows of three stepping stones are fast route only.
+			return kind != Kind.FAST && kind != Kind.STONE && !(id >= COURSE_CHARGED[0] && id <= COURSE_CHARGED[1]);
+		}
+		return true;
+	}
+
+	// The old on/off switch for the slow route became the "Fast route" choice.
+	private void migrateSlowRouteSwitch()
+	{
+		String old = configManager.getConfiguration(RaeunConfig.GROUP, OLD_SLOW_KEY);
+		if (old == null)
+		{
+			return;
+		}
+		if ("false".equals(old) && configManager.getConfiguration(RaeunConfig.GROUP, HIGHLIGHT_KEY) == null)
+		{
+			configManager.setConfiguration(RaeunConfig.GROUP, HIGHLIGHT_KEY, RaeunConfig.Highlight.FAST);
+		}
+		configManager.unsetConfiguration(RaeunConfig.GROUP, OLD_SLOW_KEY);
 	}
 
 	boolean chestOpenable(TileObject o)
@@ -304,6 +349,11 @@ public class RaeunPlugin extends Plugin
 		{
 			placeOnGrid(o, t);
 			stonesInScene = true;
+		}
+		if (o.getId() == LINE_STONE)
+		{
+			WorldPoint p = WorldPoint.fromLocalInstance(client, o.getLocalLocation());
+			t.lineFirst = p != null && p.getX() == LINE_FIRST_X && p.getY() == LINE_FIRST_Y;
 		}
 		objects.put(o, t);
 	}
@@ -428,7 +478,7 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		LOG.debug("Raeun click: id={} kind={} option={} tick={}", e.getId(), kind, e.getMenuOption(), client.getTickCount());
+		LOG.debug("Raeun click: id={} kind={} option={} tick={} scene={},{}", e.getId(), kind, e.getMenuOption(), client.getTickCount(), e.getParam0(), e.getParam1());
 		if (lapStartTick < 0)
 		{
 			startLap(client.getTickCount());
@@ -440,12 +490,13 @@ public class RaeunPlugin extends Plugin
 	{
 		if (e.getIdentifier() == FINAL_JUMP && "Jump".equals(e.getOption()) && hideFinalJump())
 		{
-			client.getMenu().removeMenuEntry(e.getMenuEntry());
+			// Still in the right-click menu, just no longer what a left click does.
+			e.getMenuEntry().setDeprioritized(true);
 		}
 	}
 
-	// Only hide the jump when the chest can actually be looted, so a missed XP drop can't leave you stuck.
-	private boolean hideFinalJump()
+	// Only hold the jump back when the chest can actually be looted, so a missed XP drop can't leave you stuck.
+	boolean hideFinalJump()
 	{
 		if (!config.hideJumpUntilLooted() || chestLooted || lapStartTick < 0
 			|| client.getRealSkillLevel(Skill.THIEVING) < CHEST_THIEVING)
