@@ -53,7 +53,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 )
 public class RaeunPlugin extends Plugin
 {
-	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63608, 63613}, {63616, 63617}, {63872, 63885}};
+	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
 	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
 	private static final int FIRST_CHARGED_GAP = 63585;
 	private static final int[] SLOW_GAPS = {63574, 63575, 63576, 63577, 63584};
@@ -327,12 +327,21 @@ public class RaeunPlugin extends Plugin
 
 	int clicksNeeded(int id, String key)
 	{
+		int known = wikiClicks(id);
+		if (known > 0)
+		{
+			return known;
+		}
 		Learned l = config.learnGaps() ? learned.get(key) : null;
-		return l != null && l.clicks > 1 ? l.clicks : wikiClicks(id);
+		return l != null && l.clicks > 1 ? l.clicks : 0;
 	}
 
-	boolean clicksConfirmed(String key)
+	boolean clicksConfirmed(int id, String key)
 	{
+		if (wikiClicks(id) > 0)
+		{
+			return true;
+		}
 		Learned l = config.learnGaps() ? learned.get(key) : null;
 		return l != null && l.confirmed;
 	}

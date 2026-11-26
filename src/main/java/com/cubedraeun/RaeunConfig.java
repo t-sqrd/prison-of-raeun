@@ -42,7 +42,14 @@ public interface RaeunConfig extends Config
 	@ConfigItem(keyName = "obstacleColor", name = "Obstacle", description = "Outline colour for every obstacle on the course", section = obstacles, position = 2)
 	default Color obstacleColor()
 	{
-		return new Color(0x6C, 0xD2, 0x4A);
+		return new Color(0xFF, 0xC8, 0x3D);
+	}
+
+	@Alpha
+	@ConfigItem(keyName = "chargedColor", name = "Charged jump", description = "Outline colour for the stones that need a charged jump", section = obstacles, position = 3)
+	default Color chargedColor()
+	{
+		return new Color(0x5C, 0xE1, 0xFF);
 	}
 
 	@Alpha
@@ -69,7 +76,7 @@ public interface RaeunConfig extends Config
 	@ConfigItem(keyName = "chestColor", name = "Chest", description = "Outline colour for the reward chest", section = obstacles, position = 8)
 	default Color chestColor()
 	{
-		return new Color(0xFF, 0x3D, 0xC8);
+		return new Color(0xFF, 0x5F, 0xD2);
 	}
 
 	@ConfigItem(keyName = "showClickCounter", name = "Count clicks on charged jumps", description = "Show how many times you have clicked the charged jump, next to how many it needs", section = charged, position = 0)

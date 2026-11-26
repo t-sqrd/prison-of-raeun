@@ -90,10 +90,10 @@ class RaeunSceneOverlay extends Overlay
 				}
 				else
 				{
-					color = config.obstacleColor();
+					color = config.chargedColor();
 					if (need > 0)
 					{
-						label = "x" + need + (plugin.clicksConfirmed(t.key) ? "" : "?");
+						label = "x" + need + (plugin.clicksConfirmed(o.getId(), t.key) ? "" : "?");
 					}
 				}
 				if (!outline && label == null)
@@ -111,6 +111,10 @@ class RaeunSceneOverlay extends Overlay
 			}
 
 			Shape box = o.getClickbox();
+			if (box == null)
+			{
+				box = o.getCanvasTilePoly();
+			}
 			if (box == null)
 			{
 				continue;
