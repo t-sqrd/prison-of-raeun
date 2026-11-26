@@ -3,7 +3,9 @@ package com.prisonofraeun;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.Shape;
 import java.util.Map;
 import javax.inject.Inject;
@@ -97,7 +99,7 @@ class RaeunSceneOverlay extends Overlay
 				case CHARGED:
 					int need = RaeunPlugin.clicksNeeded(o.getId());
 					color = config.chargedColor();
-					label = need > 0 ? "x" + need : null;
+					label = need > 0 ? String.valueOf(need) : null;
 					break;
 				case STONE:
 					if (!t.solid)
@@ -155,6 +157,15 @@ class RaeunSceneOverlay extends Overlay
 			boolean labelWanted = t.kind == RaeunPlugin.Kind.CHARGED ? config.showClickCounts() : config.showLabels();
 			if (label != null && labelWanted)
 			{
+				if (t.kind == RaeunPlugin.Kind.CHARGED)
+				{
+					Rectangle b = box.getBounds();
+					FontMetrics fm = g.getFontMetrics();
+					int x = b.x + (b.width - fm.stringWidth(label)) / 2;
+					int y = b.y + (b.height + fm.getAscent() - fm.getDescent()) / 2;
+					OverlayUtil.renderTextLocation(g, new Point(x, y), label, Color.WHITE);
+					continue;
+				}
 				Point p = o.getCanvasTextLocation(g, label, 40);
 				if (p != null)
 				{

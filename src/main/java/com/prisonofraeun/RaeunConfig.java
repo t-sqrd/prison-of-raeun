@@ -70,7 +70,7 @@ public interface RaeunConfig extends Config
 		return true;
 	}
 
-	@ConfigItem(keyName = "showClickCounts", name = "Show click counts", description = "Show how many clicks each charged jump needs (x2, x3, x4)", position = 3)
+	@ConfigItem(keyName = "showClickCounts", name = "Show click counts", description = "Show how many clicks each charged jump needs (2, 3 or 4), inside the outline", position = 3)
 	default boolean showClickCounts()
 	{
 		return true;
@@ -99,7 +99,7 @@ public interface RaeunConfig extends Config
 	@ConfigItem(keyName = "labelSize", name = "Label size", description = "Text size for the click counts and labels", position = 7)
 	default LabelSize labelSize()
 	{
-		return LabelSize.REGULAR;
+		return LabelSize.BOLD;
 	}
 
 	@Range(min = 5, max = 60)
