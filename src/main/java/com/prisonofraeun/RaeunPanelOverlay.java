@@ -1,4 +1,4 @@
-package com.cubedraeun;
+package com.prisonofraeun;
 
 import java.awt.Color;
 import java.awt.Dimension;
@@ -17,7 +17,6 @@ class RaeunPanelOverlay extends OverlayPanel
 {
 	private static final Color LABEL = new Color(0xC9, 0xC4, 0xB4);
 	private static final Color GOOD = new Color(0x5E, 0xE0, 0x7A);
-	private static final Color BAD = new Color(0xFF, 0x6B, 0x5C);
 	private static final NumberFormat NUM = NumberFormat.getIntegerInstance(Locale.US);
 
 	private final Client client;
@@ -63,13 +62,6 @@ class RaeunPanelOverlay extends OverlayPanel
 		if (config.highlightChest() && plugin.lapStartTick >= 0 && !plugin.chestLooted)
 		{
 			line("Chest", "not looted", config.chestColor());
-		}
-
-		RaeunPlugin.Charge charge = plugin.currentCharge();
-		if (charge != null)
-		{
-			int need = RaeunPlugin.clicksNeeded(charge.id);
-			line("Clicks", charge.clicks + (need > 0 ? " / " + need : ""), need <= 0 || charge.clicks < need ? Color.WHITE : charge.clicks == need ? GOOD : BAD);
 		}
 		return super.render(g);
 	}

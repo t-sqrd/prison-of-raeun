@@ -1,4 +1,4 @@
-package com.cubedraeun;
+package com.prisonofraeun;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;

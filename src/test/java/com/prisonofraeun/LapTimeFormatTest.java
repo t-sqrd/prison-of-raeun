@@ -1,4 +1,4 @@
-package com.cubedraeun;
+package com.prisonofraeun;
 
 import static org.junit.Assert.assertEquals;
 import org.junit.Test;

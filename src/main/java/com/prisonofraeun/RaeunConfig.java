@@ -1,4 +1,4 @@
-package com.cubedraeun;
+package com.prisonofraeun;
 
 import java.awt.Color;
 import net.runelite.client.config.Alpha;
@@ -10,7 +10,7 @@ import net.runelite.client.config.ConfigSection;
 @ConfigGroup(RaeunConfig.GROUP)
 public interface RaeunConfig extends Config
 {
-	String GROUP = "cubedraeun";
+	String GROUP = "prisonofraeun";
 
 	@ConfigSection(name = "Colours", description = "Outline colours", position = 10)
 	String colours = "colours";

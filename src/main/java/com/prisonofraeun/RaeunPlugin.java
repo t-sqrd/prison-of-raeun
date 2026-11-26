@@ -1,7 +1,6 @@
-package com.cubedraeun;
+package com.prisonofraeun;
 
 import com.google.inject.Provides;
-import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -30,7 +29,6 @@ import net.runelite.api.events.GroundObjectDespawned;
 import net.runelite.api.events.GroundObjectSpawned;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.SoundEffectPlayed;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WallObjectDespawned;
 import net.runelite.api.events.WallObjectSpawned;
@@ -43,9 +41,9 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 @PluginDescriptor(
-	name = "Cubed's Raeun Agility",
+	name = "Prison of Raeun",
 	description = "Prison of Raeun agility course: obstacle outlines, charged jump click counts, lap timer, XP per hour and chest loot",
-	tags = {"agility", "raeun", "graveyard", "prison", "course", "lap", "marks", "cubed"}
+	tags = {"agility", "raeun", "graveyard", "prison", "course", "lap", "marks"}
 )
 public class RaeunPlugin extends Plugin
 {
@@ -64,9 +62,6 @@ public class RaeunPlugin extends Plugin
 
 	private static final int SUNKEN_TREASURE = 35033;
 	private static final int INVENTORY = 93;
-	private static final int MAX_CHARGE = 4;
-	private static final int CHARGE_WINDOW_TICKS = 10;
-	private static final int CHARGE_STALE_TICKS = 40;
 	private static final int LAP_FINISH_XP = 900;
 	private static final int WHOLE_LAP_XP = 1500;
 	private static final int MAX_XP_DROP = 5000;
@@ -81,46 +76,14 @@ public class RaeunPlugin extends Plugin
 	static final class Tracked
 	{
 		final Kind kind;
-		final int x;
-		final int y;
 		int rowVarbit;
 		int column;
 		boolean solidWhenPicked;
 		boolean solid = true;
 
-		Tracked(TileObject o, Kind kind)
+		Tracked(Kind kind)
 		{
 			this.kind = kind;
-			WorldView wv = o.getWorldView();
-			if (o instanceof GameObject)
-			{
-				net.runelite.api.Point min = ((GameObject) o).getSceneMinLocation();
-				x = wv.getBaseX() + min.getX();
-				y = wv.getBaseY() + min.getY();
-			}
-			else
-			{
-				x = wv.getBaseX() + o.getLocalLocation().getSceneX();
-				y = wv.getBaseY() + o.getLocalLocation().getSceneY();
-			}
-		}
-	}
-
-	static final class Charge
-	{
-		final int id;
-		final int x;
-		final int y;
-		int clicks;
-		int soundId = -1;
-		int lastClickTick;
-
-		Charge(int id, int x, int y, int tick)
-		{
-			this.id = id;
-			this.x = x;
-			this.y = y;
-			this.lastClickTick = tick;
 		}
 	}
 
@@ -141,7 +104,6 @@ public class RaeunPlugin extends Plugin
 
 	final Map<TileObject, Tracked> objects = new IdentityHashMap<>();
 	private final Map<Integer, Kind> kinds = new HashMap<>();
-	private final ArrayDeque<Charge> charges = new ArrayDeque<>();
 	private boolean stonesInScene;
 
 	private int lastAgilityXp;
@@ -214,7 +176,6 @@ public class RaeunPlugin extends Plugin
 		overlayManager.remove(sceneOverlay);
 		overlayManager.remove(panelOverlay);
 		objects.clear();
-		charges.clear();
 		kinds.clear();
 	}
 
@@ -230,7 +191,6 @@ public class RaeunPlugin extends Plugin
 		chestLooted = false;
 		lastLapTicks = 0;
 		lastLapWasBest = false;
-		charges.clear();
 	}
 
 	boolean onCourse()
@@ -242,16 +202,6 @@ public class RaeunPlugin extends Plugin
 	{
 		int i = id - FIRST_CHARGED_GAP;
 		return i >= 0 && i < CHARGED_CLICKS.length ? CHARGED_CLICKS[i] : 0;
-	}
-
-	Charge currentCharge()
-	{
-		Charge c = charges.peekLast();
-		if (c == null || client.getTickCount() - c.lastClickTick > CHARGE_STALE_TICKS)
-		{
-			return null;
-		}
-		return c;
 	}
 
 	boolean chestOpenable(TileObject o)
@@ -322,7 +272,7 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		Tracked t = new Tracked(o, kind);
+		Tracked t = new Tracked(kind);
 		if (kind == Kind.STONE)
 		{
 			placeOnGrid(o, t);
@@ -427,7 +377,6 @@ public class RaeunPlugin extends Plugin
 			lastThievingXp = 0;
 			treasureHeld = -1;
 			lapStartTick = -1;
-			charges.clear();
 		}
 	}
 
@@ -447,51 +396,14 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
-		int id = e.getId();
-		Kind kind = kinds.get(id);
+		Kind kind = kinds.get(e.getId());
 		if (kind == null || kind == Kind.CHEST)
 		{
 			return;
 		}
-		int tick = client.getTickCount();
 		if (lapStartTick < 0)
 		{
-			startLap(tick);
-		}
-		if (kind != Kind.CHARGED)
-		{
-			return;
-		}
-		WorldView wv = client.getTopLevelWorldView();
-		int x = wv.getBaseX() + e.getParam0();
-		int y = wv.getBaseY() + e.getParam1();
-		Charge last = charges.peekLast();
-		if (last != null && last.id == id && last.x == x && last.y == y
-			&& tick - last.lastClickTick <= CHARGE_WINDOW_TICKS)
-		{
-			last.lastClickTick = tick;
-		}
-		else
-		{
-			charges.addLast(new Charge(id, x, y, tick));
-		}
-	}
-
-	@Subscribe
-	public void onSoundEffectPlayed(SoundEffectPlayed e)
-	{
-		Charge c = charges.peekLast();
-		if (c == null || client.getTickCount() - c.lastClickTick > CHARGE_WINDOW_TICKS)
-		{
-			return;
-		}
-		if (c.soundId < 0)
-		{
-			c.soundId = e.getSoundId();
-		}
-		if (e.getSoundId() == c.soundId && c.clicks < MAX_CHARGE)
-		{
-			c.clicks++;
+			startLap(client.getTickCount());
 		}
 	}
 
@@ -533,7 +445,6 @@ public class RaeunPlugin extends Plugin
 			startLap(tick);
 		}
 		lapXp += gained;
-		charges.pollFirst();
 		if (gained >= LAP_FINISH_XP)
 		{
 			finishLap(tick);
