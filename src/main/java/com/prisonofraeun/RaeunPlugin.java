@@ -54,7 +54,7 @@ import org.slf4j.LoggerFactory;
 public class RaeunPlugin extends Plugin
 {
 	private static final Logger LOG = LoggerFactory.getLogger(RaeunPlugin.class);
-	private static final int[][] OBSTACLES = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63621, 63623}, {63636, 63636}};
+	private static final int[][] OBSTACLES = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63622, 63623}, {63636, 63636}};
 	private static final int[] SLOW_GAPS = {63573, 63577, 63581, 63582};
 	// Obstacles only the fast route uses.
 	private static final int[] FAST_GAPS = {63584, 63589, 63593, 63594};
