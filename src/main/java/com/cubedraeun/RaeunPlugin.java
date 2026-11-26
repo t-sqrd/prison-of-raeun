@@ -30,6 +30,7 @@ import net.runelite.api.events.GroundObjectDespawned;
 import net.runelite.api.events.GroundObjectSpawned;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.SoundEffectPlayed;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WallObjectDespawned;
 import net.runelite.api.events.WallObjectSpawned;
@@ -109,7 +110,8 @@ public class RaeunPlugin extends Plugin
 		final int id;
 		final int x;
 		final int y;
-		int clicks = 1;
+		int clicks;
+		int soundId = -1;
 		int lastClickTick;
 
 		Charge(int id, int x, int y, int tick)
@@ -466,12 +468,29 @@ public class RaeunPlugin extends Plugin
 		if (last != null && last.id == id && last.x == x && last.y == y
 			&& tick - last.lastClickTick <= CHARGE_WINDOW_TICKS)
 		{
-			last.clicks++;
 			last.lastClickTick = tick;
 		}
 		else
 		{
 			charges.addLast(new Charge(id, x, y, tick));
+		}
+	}
+
+	@Subscribe
+	public void onSoundEffectPlayed(SoundEffectPlayed e)
+	{
+		Charge c = charges.peekLast();
+		if (c == null || client.getTickCount() - c.lastClickTick > CHARGE_WINDOW_TICKS)
+		{
+			return;
+		}
+		if (c.soundId < 0)
+		{
+			c.soundId = e.getSoundId();
+		}
+		if (e.getSoundId() == c.soundId)
+		{
+			c.clicks++;
 		}
 	}
 
