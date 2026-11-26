@@ -46,6 +46,24 @@ public interface RaeunConfig extends Config
 		}
 	}
 
+	enum Highlight
+	{
+		ALL("All"), FAST("Fast route"), SLOW("Slow route");
+
+		private final String name;
+
+		Highlight(String name)
+		{
+			this.name = name;
+		}
+
+		@Override
+		public String toString()
+		{
+			return name;
+		}
+	}
+
 	@ConfigSection(name = "Info box", description = "Choose what the info box shows", position = 10)
 	String infoBox = "infoBox";
 
@@ -64,10 +82,10 @@ public interface RaeunConfig extends Config
 		return true;
 	}
 
-	@ConfigItem(keyName = "showSlowRoute", name = "Outline slow route", description = "Also outline the gaps that start the slow way round", position = 2)
-	default boolean showSlowRoute()
+	@ConfigItem(keyName = "highlight", name = "Obstacles to outline", description = "All: both routes. Fast route: hides the gaps that start the slow way round. Slow route: hides the shortcuts, charged jumps and rows of three stepping stones, and outlines only the first stone of the long line", position = 2)
+	default Highlight highlight()
 	{
-		return true;
+		return Highlight.ALL;
 	}
 
 	@ConfigItem(keyName = "showClickCounts", name = "Show click counts", description = "Show how many clicks each charged jump needs (2, 3 or 4), inside the outline", position = 3)
@@ -115,10 +133,10 @@ public interface RaeunConfig extends Config
 		return false;
 	}
 
-	@ConfigItem(keyName = "hideJumpUntilLooted", name = "Hide final jump until looted", description = "Remove the Jump option on the last obstacle until you have looted the chest this lap (needs 65 Thieving)", position = 10)
+	@ConfigItem(keyName = "hideJumpUntilLooted", name = "Loot chest before final jump", description = "Until you have looted the chest this lap, a left click on the last obstacle no longer jumps and it is not outlined, so you can't leave by accident. Jump stays in the right-click menu (needs 65 Thieving)", position = 10)
 	default boolean hideJumpUntilLooted()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(keyName = "showPanel", name = "Show info box", description = "Turn the whole info box on or off", section = infoBox, position = 0)
