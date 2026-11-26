@@ -4,6 +4,8 @@ import com.google.inject.Provides;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -19,6 +21,7 @@ import net.runelite.api.Tile;
 import net.runelite.api.TileObject;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.DecorativeObjectDespawned;
 import net.runelite.api.events.DecorativeObjectSpawned;
 import net.runelite.api.events.GameObjectDespawned;
@@ -39,16 +42,25 @@ import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.Text;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
 	name = "Prison of Raeun",
-	description = "Prison of Raeun agility course: obstacle outlines, charged jump click counts, lap timer, XP per hour and chest loot",
+	description = "Shows you the quickest way through the Prison of Raeun, tells you how many clicks each charged jump needs, and keeps track of your laps, XP and loot",
 	tags = {"agility", "raeun", "graveyard", "prison", "course", "lap", "marks"}
 )
 public class RaeunPlugin extends Plugin
 {
+	private static final Logger LOG = LoggerFactory.getLogger(RaeunPlugin.class);
 	private static final int[][] OBSTACLES = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63621, 63623}, {63636, 63636}};
-	private static final int[] SLOW_GAPS = {63573, 63582};
+	private static final int[] SLOW_GAPS = {63573, 63577, 63581, 63582};
+	// Obstacles only the fast route uses.
+	private static final int[] FAST_GAPS = {63584, 63589, 63593, 63594};
+	static final int START = 63570;
+	private static final Pattern LAP_DURATION = Pattern.compile("Lap duration: ([\\d:.]+)");
+	private static final Pattern PERSONAL_BEST = Pattern.compile("Personal best: ([\\d:.]+)");
 	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
 	private static final int FIRST_CHARGED_GAP = 63585;
 	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
@@ -66,11 +78,13 @@ public class RaeunPlugin extends Plugin
 	private static final int WHOLE_LAP_XP = 1500;
 	private static final int MAX_XP_DROP = 5000;
 	private static final int IDLE_TICKS = 300;
+	// Old key held game ticks; the new one holds hundredths of a second.
 	private static final String BEST_KEY = "bestLap";
+	private static final String BEST_CS_KEY = "bestLapCs";
 
 	enum Kind
 	{
-		OBSTACLE, SLOW, CHARGED, STONE, CHEST
+		OBSTACLE, FAST, SLOW, CHARGED, STONE, CHEST
 	}
 
 	static final class Tracked
@@ -120,9 +134,15 @@ public class RaeunPlugin extends Plugin
 	int lapXp;
 	boolean chestLooted;
 
-	int lastLapTicks;
+	int lastLapCs;
 	boolean lastLapWasBest;
-	int bestLapTicks;
+	int bestLapCs;
+
+	private int gameLapTick = -1;
+	private int ownFinishTick = -1;
+	private int bestBeforeFinishCs;
+	private int gameLapCs;
+	private int gameBestCs;
 
 	@Provides
 	RaeunConfig provideConfig(ConfigManager manager)
@@ -143,6 +163,10 @@ public class RaeunPlugin extends Plugin
 		for (int id : SLOW_GAPS)
 		{
 			kinds.put(id, Kind.SLOW);
+		}
+		for (int id : FAST_GAPS)
+		{
+			kinds.put(id, Kind.FAST);
 		}
 		for (int[] r : CHARGED_GAPS)
 		{
@@ -189,7 +213,7 @@ public class RaeunPlugin extends Plugin
 		lapStartTick = -1;
 		lapXp = 0;
 		chestLooted = false;
-		lastLapTicks = 0;
+		lastLapCs = 0;
 		lastLapWasBest = false;
 	}
 
@@ -401,6 +425,7 @@ public class RaeunPlugin extends Plugin
 		{
 			return;
 		}
+		LOG.debug("Raeun click: id={} kind={} option={} tick={}", e.getId(), kind, e.getMenuOption(), client.getTickCount());
 		if (lapStartTick < 0)
 		{
 			startLap(client.getTickCount());
@@ -462,22 +487,100 @@ public class RaeunPlugin extends Plugin
 		int ticks = tick - lapStartTick;
 		boolean whole = lapXp >= WHOLE_LAP_XP && ticks > 0;
 		laps++;
-		lastLapTicks = whole ? ticks : 0;
+		// Our own count, in hundredths of a second. Replaced by the game's exact time when its message arrives.
+		int cs = ticks * 60;
+		bestBeforeFinishCs = bestLapCs;
+		ownFinishTick = tick;
+		lastLapCs = whole ? cs : 0;
 		lastLapWasBest = false;
-		if (whole && (bestLapTicks <= 0 || ticks < bestLapTicks))
+		if (whole && (bestLapCs <= 0 || cs < bestLapCs))
 		{
-			lastLapWasBest = bestLapTicks > 0;
-			bestLapTicks = ticks;
-			configManager.setRSProfileConfiguration(RaeunConfig.GROUP, BEST_KEY, ticks);
+			lastLapWasBest = bestLapCs > 0;
+			saveBest(cs);
 		}
-		if (whole && config.lapChatMessage())
+		// If the game's lap message already arrived for this finish, it wins over our count.
+		if (gameLapTick >= 0 && tick - gameLapTick <= 2)
 		{
-			String text = "Raeun lap " + laps + ": " + formatTicks(ticks) + (lastLapWasBest ? ". New best." : ".");
-			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", text, null);
+			applyGameLap();
 		}
 		lapStartTick = -1;
 		lapXp = 0;
 		chestLooted = false;
+	}
+
+	// The game posts the exact lap time and personal best when a lap ends, so prefer those over our own count.
+	@Subscribe
+	public void onChatMessage(ChatMessage e)
+	{
+		if ((e.getType() != ChatMessageType.GAMEMESSAGE && e.getType() != ChatMessageType.SPAM) || !onCourse())
+		{
+			return;
+		}
+		String text = Text.removeTags(e.getMessage());
+		Matcher duration = LAP_DURATION.matcher(text);
+		if (!duration.find())
+		{
+			return;
+		}
+		gameLapCs = parseTime(duration.group(1));
+		Matcher best = PERSONAL_BEST.matcher(text);
+		gameBestCs = best.find() ? parseTime(best.group(1)) : 0;
+		gameLapTick = client.getTickCount();
+		applyGameLap();
+	}
+
+	private void applyGameLap()
+	{
+		if (gameLapCs <= 0)
+		{
+			return;
+		}
+		lastLapCs = gameLapCs;
+		// Ignore a best that our own, less exact count set for this same finish.
+		boolean ownCountRan = ownFinishTick >= 0 && Math.abs(client.getTickCount() - ownFinishTick) <= 2;
+		int known = ownCountRan ? bestBeforeFinishCs : bestLapCs;
+		int best;
+		if (gameBestCs > 0)
+		{
+			// The game's personal best is the real one, even if it is older than this plugin.
+			best = Math.min(gameBestCs, gameLapCs);
+			lastLapWasBest = gameLapCs <= gameBestCs;
+		}
+		else
+		{
+			// No old best in the message: either a new personal best or the first lap ever.
+			lastLapWasBest = known <= 0 || gameLapCs <= known;
+			best = lastLapWasBest ? gameLapCs : known;
+		}
+		if (best != bestLapCs)
+		{
+			saveBest(best);
+		}
+	}
+
+	// "3:55.20" or "1:02:03.40" to hundredths of a second.
+	static int parseTime(String s)
+	{
+		try
+		{
+			String[] parts = s.replaceAll("\\.$", "").split(":");
+			double seconds = 0;
+			for (String part : parts)
+			{
+				seconds = seconds * 60 + Double.parseDouble(part);
+			}
+			return (int) Math.round(seconds * 100);
+		}
+		catch (NumberFormatException ex)
+		{
+			return 0;
+		}
+	}
+
+	private void saveBest(int cs)
+	{
+		bestLapCs = cs;
+		configManager.setRSProfileConfiguration(RaeunConfig.GROUP, BEST_CS_KEY, cs);
 	}
 
 	@Subscribe
@@ -559,20 +662,37 @@ public class RaeunPlugin extends Plugin
 		return minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "." + (tenths % 10);
 	}
 
+	static String formatCs(int cs)
+	{
+		int minutes = cs / 6000;
+		int seconds = (cs / 100) % 60;
+		int hundredths = cs % 100;
+		return minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "." + (hundredths < 10 ? "0" : "") + hundredths;
+	}
+
 	private void loadBest()
 	{
-		bestLapTicks = 0;
-		String saved = configManager.getRSProfileConfiguration(RaeunConfig.GROUP, BEST_KEY);
-		if (saved != null)
+		bestLapCs = savedInt(BEST_CS_KEY);
+		if (bestLapCs <= 0)
 		{
-			try
-			{
-				bestLapTicks = Integer.parseInt(saved.trim());
-			}
-			catch (NumberFormatException ex)
-			{
-				bestLapTicks = 0;
-			}
+			bestLapCs = savedInt(BEST_KEY) * 60;
+		}
+	}
+
+	private int savedInt(String key)
+	{
+		String saved = configManager.getRSProfileConfiguration(RaeunConfig.GROUP, key);
+		if (saved == null)
+		{
+			return 0;
+		}
+		try
+		{
+			return Integer.parseInt(saved.trim());
+		}
+		catch (NumberFormatException ex)
+		{
+			return 0;
 		}
 	}
 }

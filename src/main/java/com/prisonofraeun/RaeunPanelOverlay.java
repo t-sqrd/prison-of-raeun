@@ -41,27 +41,42 @@ class RaeunPanelOverlay extends OverlayPanel
 		{
 			return null;
 		}
-		panelComponent.getChildren().add(TitleComponent.builder().text("Prison of Raeun").build());
-
 		int tick = client.getTickCount();
-		line("Lap", plugin.lapStartTick < 0 ? "-" : RaeunPlugin.formatTicks(tick - plugin.lapStartTick), Color.WHITE);
-		if (plugin.lastLapTicks > 0)
+		if (config.showLap())
 		{
-			line("Last lap", RaeunPlugin.formatTicks(plugin.lastLapTicks), plugin.lastLapWasBest ? GOOD : Color.WHITE);
+			line("Lap", plugin.lapStartTick < 0 ? "-" : RaeunPlugin.formatTicks(tick - plugin.lapStartTick), Color.WHITE);
 		}
-		if (plugin.bestLapTicks > 0)
+		if (config.showLastLap() && plugin.lastLapCs > 0)
 		{
-			line("Best lap", RaeunPlugin.formatTicks(plugin.bestLapTicks), Color.WHITE);
+			line("Last lap", RaeunPlugin.formatCs(plugin.lastLapCs), plugin.lastLapWasBest ? GOOD : Color.WHITE);
 		}
-		line("Laps", String.valueOf(plugin.laps), Color.WHITE);
-		line("XP/hr", NUM.format(plugin.xpPerHour()), Color.WHITE);
-		if (plugin.treasure > 0)
+		if (config.showBestLap() && plugin.bestLapCs > 0)
+		{
+			line("Best lap", RaeunPlugin.formatCs(plugin.bestLapCs), Color.WHITE);
+		}
+		if (config.showLaps())
+		{
+			line("Laps", String.valueOf(plugin.laps), Color.WHITE);
+		}
+		if (config.showXpHr())
+		{
+			line("XP/hr", NUM.format(plugin.xpPerHour()), Color.WHITE);
+		}
+		if (config.showTreasure() && plugin.treasure > 0)
 		{
 			line("Treasure", plugin.treasure + String.format(Locale.US, " (%.0f/hr)", plugin.treasurePerHour()), Color.WHITE);
 		}
-		if (config.highlightChest() && plugin.lapStartTick >= 0 && !plugin.chestLooted)
+		if (config.showChest() && config.highlightChest() && plugin.lapStartTick >= 0 && !plugin.chestLooted)
 		{
 			line("Chest", "not looted", config.chestColor());
+		}
+		if (panelComponent.getChildren().isEmpty())
+		{
+			return null;
+		}
+		if (config.showTitle())
+		{
+			panelComponent.getChildren().add(0, TitleComponent.builder().text("Prison of Raeun").build());
 		}
 		return super.render(g);
 	}

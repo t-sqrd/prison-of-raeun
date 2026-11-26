@@ -20,12 +20,7 @@ import net.runelite.client.ui.overlay.OverlayUtil;
 
 class RaeunSceneOverlay extends Overlay
 {
-	private static final BasicStroke THIN = new BasicStroke(1.5f);
-	private static final BasicStroke THICK = new BasicStroke(2.5f);
-	private static final BasicStroke HEAVY = new BasicStroke(4f);
-	private static final int FILL = 35;
-	private static final int CHEST_FILL = 110;
-	private static final int REACH = 30;
+	private static final Color FAKE_STONE = new Color(170, 170, 170, 110);
 	private static final int CHEST_REACH = 60;
 	private static final int CHEST_THIEVING = 65;
 
@@ -60,6 +55,15 @@ class RaeunSceneOverlay extends Overlay
 		}
 		WorldPoint here = me.getWorldLocation();
 		Point mouse = client.getMouseCanvasPosition();
+		// Hovered outlines get a little thicker, and the chest is always the boldest thing on screen.
+		int width = Math.max(1, config.outlineWidth());
+		final BasicStroke THIN = new BasicStroke(width);
+		final BasicStroke THICK = new BasicStroke(width + 1f);
+		final BasicStroke HEAVY = new BasicStroke(width + 2f);
+		final int FILL = Math.max(0, Math.min(255, config.fillOpacity()));
+		final int CHEST_FILL = Math.min(255, FILL * 2);
+		int reach = Math.max(1, config.highlightDistance());
+		g.setFont(config.labelSize().font());
 
 		for (Map.Entry<TileObject, RaeunPlugin.Tracked> en : plugin.objects.entrySet())
 		{
@@ -70,13 +74,14 @@ class RaeunSceneOverlay extends Overlay
 			{
 				continue;
 			}
-			if (o.getWorldLocation().distanceTo2D(here) > (chest ? CHEST_REACH : REACH))
+			if (o.getWorldLocation().distanceTo2D(here) > (chest ? CHEST_REACH : reach))
 			{
 				continue;
 			}
 
 			Color color;
 			String label = null;
+			boolean faint = false;
 			BasicStroke stroke = THIN;
 			switch (t.kind)
 			{
@@ -97,15 +102,33 @@ class RaeunSceneOverlay extends Overlay
 				case STONE:
 					if (!t.solid)
 					{
-						continue;
+						if (!config.showFakeStones())
+						{
+							continue;
+						}
+						// Fake stones: a faint grey outline, so the real one still stands out.
+						faint = true;
+						color = FAKE_STONE;
+						break;
 					}
 					color = config.fastColor();
 					break;
+				case FAST:
+					color = config.fastColor();
+					break;
 				case SLOW:
+					if (!config.showSlowRoute())
+					{
+						continue;
+					}
 					color = config.slowColor();
 					break;
 				default:
 					color = config.obstacleColor();
+					if (o.getId() == RaeunPlugin.START && plugin.lapStartTick < 0)
+					{
+						label = "Start";
+					}
 					break;
 			}
 
@@ -118,20 +141,25 @@ class RaeunSceneOverlay extends Overlay
 			{
 				continue;
 			}
-			boolean hover = mouse != null && box.contains(mouse.getX(), mouse.getY());
-			int alpha = chest ? CHEST_FILL : hover ? FILL * 2 : FILL;
-			g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
-			g.fill(box);
+			boolean hover = !faint && mouse != null && box.contains(mouse.getX(), mouse.getY());
+			if (!faint)
+			{
+				int alpha = chest || hover ? CHEST_FILL : FILL;
+				g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+				g.fill(box);
+			}
 			g.setColor(color);
-			g.setStroke(hover && stroke == THIN ? THICK : stroke);
+			g.setStroke(hover && stroke != HEAVY ? THICK : stroke);
 			g.draw(box);
 
-			if (label != null)
+			boolean labelWanted = t.kind == RaeunPlugin.Kind.CHARGED ? config.showClickCounts() : config.showLabels();
+			if (label != null && labelWanted)
 			{
 				Point p = o.getCanvasTextLocation(g, label, 40);
 				if (p != null)
 				{
-					OverlayUtil.renderTextLocation(g, p, label, color);
+					// Chest text sits on its own filled box, so white reads better than pink on pink.
+					OverlayUtil.renderTextLocation(g, p, label, chest ? Color.WHITE : color);
 				}
 			}
 		}
