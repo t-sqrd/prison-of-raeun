@@ -22,7 +22,6 @@ class RaeunSceneOverlay extends Overlay
 {
 	private static final Color FAKE_STONE = new Color(170, 170, 170, 110);
 	private static final int CHEST_REACH = 60;
-	private static final int CHEST_THIEVING = 65;
 
 	private final Client client;
 	private final RaeunPlugin plugin;
@@ -48,7 +47,7 @@ class RaeunSceneOverlay extends Overlay
 		}
 		boolean obstacles = config.highlightObstacles();
 		boolean chestWanted = config.highlightChest() && !plugin.chestLooted && plugin.lapStartTick >= 0
-			&& client.getRealSkillLevel(Skill.THIEVING) >= CHEST_THIEVING;
+			&& client.getRealSkillLevel(Skill.THIEVING) >= RaeunPlugin.CHEST_THIEVING;
 		if (!obstacles && !chestWanted)
 		{
 			return null;

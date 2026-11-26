@@ -115,6 +115,12 @@ public interface RaeunConfig extends Config
 		return false;
 	}
 
+	@ConfigItem(keyName = "hideJumpUntilLooted", name = "Hide final jump until looted", description = "Remove the Jump option on the last obstacle until you have looted the chest this lap (needs 65 Thieving)", position = 10)
+	default boolean hideJumpUntilLooted()
+	{
+		return false;
+	}
+
 	@ConfigItem(keyName = "showPanel", name = "Show info box", description = "Turn the whole info box on or off", section = infoBox, position = 0)
 	default boolean showPanel()
 	{

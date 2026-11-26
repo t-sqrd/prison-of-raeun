@@ -31,6 +31,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GroundObjectDespawned;
 import net.runelite.api.events.GroundObjectSpawned;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WallObjectDespawned;
@@ -66,6 +67,8 @@ public class RaeunPlugin extends Plugin
 	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
 	private static final int STEPPING_STONE = 63595;
 	private static final int CHEST = 63481;
+	private static final int FINAL_JUMP = 63583;
+	static final int CHEST_THIEVING = 65;
 
 	private static final int[][] STONE_GRIDS = {
 		{2683, 16930, 10544, 17, -1, 1},
@@ -430,6 +433,33 @@ public class RaeunPlugin extends Plugin
 		{
 			startLap(client.getTickCount());
 		}
+	}
+
+	@Subscribe
+	public void onMenuEntryAdded(MenuEntryAdded e)
+	{
+		if (e.getIdentifier() == FINAL_JUMP && "Jump".equals(e.getOption()) && hideFinalJump())
+		{
+			client.getMenu().removeMenuEntry(e.getMenuEntry());
+		}
+	}
+
+	// Only hide the jump when the chest can actually be looted, so a missed XP drop can't leave you stuck.
+	private boolean hideFinalJump()
+	{
+		if (!config.hideJumpUntilLooted() || chestLooted || lapStartTick < 0
+			|| client.getRealSkillLevel(Skill.THIEVING) < CHEST_THIEVING)
+		{
+			return false;
+		}
+		for (Map.Entry<TileObject, Tracked> en : objects.entrySet())
+		{
+			if (en.getValue().kind == Kind.CHEST && chestOpenable(en.getKey()))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void startLap(int tick)
