@@ -62,6 +62,10 @@ public class RaeunPlugin extends Plugin
 	private static final int SOLID_STONE = 63484;
 	private static final int CHEST = 63481;
 	private static final int STONE_LOOKUP_TRIES = 5;
+	private static final int[][] STONE_GRIDS = {
+		{2683, 16930, 10544, 17, -1, 1},
+		{2754, 16919, 10518, 11, 1, 0},
+	};
 
 	static final int SUNKEN_TREASURE = 35033;
 	static final int GRACEFUL_KIT = 35027;
@@ -127,6 +131,9 @@ public class RaeunPlugin extends Plugin
 		boolean solid = true;
 		int stoneId = -1;
 		int lookups;
+		int rowVarbit;
+		int column;
+		boolean solidWhenPicked;
 
 		Tracked(TileObject o, Kind kind, boolean stone)
 		{
@@ -340,6 +347,17 @@ public class RaeunPlugin extends Plugin
 			{
 				continue;
 			}
+			if (t.lookups == 0)
+			{
+				locateStone(en.getKey(), t);
+			}
+			if (t.rowVarbit > 0)
+			{
+				boolean picked = client.getVarbitValue(t.rowVarbit) == t.column;
+				t.solid = (picked == t.solidWhenPicked) != swap;
+				t.lookups = 1;
+				continue;
+			}
 			if (t.stoneId < 0 && t.lookups < STONE_LOOKUP_TRIES)
 			{
 				t.lookups++;
@@ -354,33 +372,69 @@ public class RaeunPlugin extends Plugin
 		}
 	}
 
+	private void locateStone(TileObject gap, Tracked t)
+	{
+		WorldPoint p = WorldPoint.fromLocalInstance(client, gap.getLocalLocation());
+		if (p == null)
+		{
+			return;
+		}
+		int x = p.getX();
+		int y = p.getY();
+		for (int[] g : STONE_GRIDS)
+		{
+			int row = (y - g[2]) / 2 * g[4];
+			if (x >= g[0] && x < g[0] + 3 && (y - g[2]) % 2 == 0 && row >= 0 && row < g[3])
+			{
+				t.rowVarbit = g[1] + row;
+				t.column = x - g[0];
+				t.solidWhenPicked = g[5] == 1;
+				return;
+			}
+		}
+	}
+
 	private int findStoneBelow(TileObject gap, Tracked t)
 	{
 		Tile[][][] tiles = gap.getWorldView().getScene().getTiles();
-		for (int plane = gap.getPlane() - 1; plane >= 0; plane--)
+		for (Tile[][] plane : tiles)
 		{
-			Tile tile = tiles[plane][t.sx][t.sy];
-			if (tile == null || tile.getGameObjects() == null)
+			Tile tile = plane[t.sx][t.sy];
+			while (tile != null)
+			{
+				int id = stoneOn(tile);
+				if (id >= 0)
+				{
+					return id;
+				}
+				tile = tile.getBridge();
+			}
+		}
+		return -1;
+	}
+
+	private int stoneOn(Tile tile)
+	{
+		if (tile.getGameObjects() == null)
+		{
+			return -1;
+		}
+		for (GameObject below : tile.getGameObjects())
+		{
+			if (below == null)
 			{
 				continue;
 			}
-			for (GameObject below : tile.getGameObjects())
+			int[] variants = client.getObjectDefinition(below.getId()).getImpostorIds();
+			if (variants == null)
 			{
-				if (below == null)
+				continue;
+			}
+			for (int v : variants)
+			{
+				if (v == SOLID_STONE)
 				{
-					continue;
-				}
-				int[] variants = client.getObjectDefinition(below.getId()).getImpostorIds();
-				if (variants == null)
-				{
-					continue;
-				}
-				for (int v : variants)
-				{
-					if (v == SOLID_STONE)
-					{
-						return below.getId();
-					}
+					return below.getId();
 				}
 			}
 		}
