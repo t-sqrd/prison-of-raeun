@@ -64,6 +64,7 @@ public class RaeunPlugin extends Plugin
 
 	private static final int SUNKEN_TREASURE = 35033;
 	private static final int INVENTORY = 93;
+	private static final int MAX_CHARGE = 4;
 	private static final int CHARGE_WINDOW_TICKS = 10;
 	private static final int CHARGE_STALE_TICKS = 40;
 	private static final int LAP_FINISH_XP = 900;
@@ -488,7 +489,7 @@ public class RaeunPlugin extends Plugin
 		{
 			c.soundId = e.getSoundId();
 		}
-		if (e.getSoundId() == c.soundId)
+		if (e.getSoundId() == c.soundId && c.clicks < MAX_CHARGE)
 		{
 			c.clicks++;
 		}
