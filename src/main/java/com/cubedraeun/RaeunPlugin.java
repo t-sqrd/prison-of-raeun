@@ -56,8 +56,8 @@ public class RaeunPlugin extends Plugin
 	private static final int[][] CHARGED_GAPS = {{63585, 63588}, {63590, 63592}, {63616, 63617}, {63872, 63885}};
 	private static final int[] CHARGED_CLICKS = {2, 4, 3, 2, 0, 2, 4, 2};
 	private static final int FIRST_CHARGED_GAP = 63585;
-	private static final int[] SLOW_GAPS = {63574, 63575, 63576, 63577, 63584};
-	private static final int[][] SHARED_GAPS = {{63570, 63573}, {63578, 63583}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63614, 63615}, {63621, 63623}, {63636, 63636}};
+	private static final int[] SLOW_GAPS = {63573, 63582};
+	private static final int[][] SHARED_GAPS = {{63570, 63584}, {63589, 63589}, {63593, 63594}, {63596, 63597}, {63614, 63615}, {63621, 63623}, {63636, 63636}};
 	private static final int STEPPING_STONE = 63595;
 	private static final int SOLID_STONE = 63484;
 	private static final int CHEST = 63481;
@@ -304,7 +304,7 @@ public class RaeunPlugin extends Plugin
 		{
 			kinds.put(id, Kind.SLOW);
 		}
-		kinds.put(STEPPING_STONE, Kind.SLOW);
+		kinds.put(STEPPING_STONE, Kind.SHARED);
 		for (int[] r : CHARGED_GAPS)
 		{
 			for (int i = r[0]; i <= r[1]; i++)

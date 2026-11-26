@@ -23,6 +23,7 @@ class RaeunSceneOverlay extends Overlay
 	private static final BasicStroke THIN = new BasicStroke(1.5f);
 	private static final BasicStroke THICK = new BasicStroke(2.5f);
 	private static final BasicStroke HEAVY = new BasicStroke(4f);
+	private static final BasicStroke DASHED = new BasicStroke(2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{6f, 4f}, 0f);
 	private static final int CHEST_FILL = 110;
 	private static final int CHEST_REACH = 60;
 
@@ -107,7 +108,7 @@ class RaeunSceneOverlay extends Overlay
 				{
 					continue;
 				}
-				color = config.obstacleColor();
+				color = t.stone ? config.fastColor() : t.kind == RaeunPlugin.Kind.SLOW ? config.slowColor() : config.obstacleColor();
 			}
 
 			Shape box = o.getClickbox();
@@ -127,7 +128,7 @@ class RaeunSceneOverlay extends Overlay
 				g.fill(box);
 			}
 			g.setColor(color);
-			g.setStroke(chest ? HEAVY : hover ? THICK : THIN);
+			g.setStroke(chest ? HEAVY : t.kind == RaeunPlugin.Kind.SLOW ? DASHED : hover ? THICK : THIN);
 			g.draw(box);
 
 			if (label != null)

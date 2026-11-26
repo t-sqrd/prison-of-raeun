@@ -53,6 +53,20 @@ public interface RaeunConfig extends Config
 	}
 
 	@Alpha
+	@ConfigItem(keyName = "fastColor", name = "Fast route stones", description = "Outline colour for the one real stone in each row of three", section = obstacles, position = 4)
+	default Color fastColor()
+	{
+		return new Color(0x5E, 0xE0, 0x7A);
+	}
+
+	@Alpha
+	@ConfigItem(keyName = "slowColor", name = "Slow route", description = "Outline colour for the gaps that start the slow way round, drawn dashed", section = obstacles, position = 4)
+	default Color slowColor()
+	{
+		return new Color(0xFF, 0x6B, 0x5C);
+	}
+
+	@Alpha
 	@ConfigItem(keyName = "chargingColor", name = "Gap being charged", description = "Outline colour for the charged jump you are clicking", section = obstacles, position = 5)
 	default Color chargingColor()
 	{
